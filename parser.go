@@ -66,6 +66,8 @@ func parseFile(fpath string) error {
 
 	scanner := bufio.NewScanner(file)
 
+	// 16/Aug/2016:14:19:54
+	var datepath = regexp.MustCompile(`[0-9]+/[a-zA-Z]+/[0-9]+:[0-9]+:[0-9]+:[0-9]+`)
 	var urlpath = regexp.MustCompile(`/[a-zA-Z0-9]+`)
 
 	// read each line and process the data
@@ -73,6 +75,7 @@ func parseFile(fpath string) error {
 		// the regex finds the / paths.  slice 1 = year 2 = month
 		//  Hence we start > 2
 		urlsplit := urlpath.FindAll(scanner.Bytes(), -1)[2:]
+		date1 := datepath.FindAll(scanner.Bytes(), -1)
 
 		if len(urlsplit) > 2 {
 			id := string(urlsplit[2])[1:]
@@ -81,7 +84,9 @@ func parseFile(fpath string) error {
 
 				fmt.Printf("%s \n", urlsplit)
 
-				fmt.Println(scanner.Text())
+				fmt.Printf("date: %s", date1)
+
+				//fmt.Println(scanner.Text())
 			}
 		}
 
@@ -129,6 +134,7 @@ func printStats() {
 	// now sort d1, and get the top 5 accounts
 	sort.Sort(sort.Reverse(byHits(d1)))
 
+	// list out just the first 5 entries
 	for _, as := range d1[:5] {
 		fmt.Printf("%s\t%v\t3\t35\t1\n", accountInfo[as.ID].AccountID, accountInfo[as.ID].PageHits)
 	}
