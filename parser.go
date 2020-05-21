@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 )
 
 var (
@@ -97,6 +98,13 @@ type kv struct {
 	Hits int64
 }
 
+// actSort implements sort.Interface for the PageHits field
+type byHits []*kv
+
+func (a byHits) Len() int           { return len(a) }
+func (a byHits) Less(x, y int) bool { return a[x].Hits < a[y].Hits }
+func (a byHits) Swap(x, y int)      { a[x], a[y] = a[y], a[x] }
+
 func printStats() {
 
 	/*
@@ -114,17 +122,14 @@ func printStats() {
 	// to be replaced by a loop of the real stats
 	//fmt.Printf("71f28176\t75\t3\t35\t1\n")
 
-	// calculate the top 5 unique users by page views
-	d1 := []kv{}
-
+	d1 := []*kv{}
 	for _, d := range accountInfo {
-		d1 = append(d1, kv{d.AccountID, d.PageHits})
+		d1 = append(d1, &kv{d.AccountID, d.PageHits})
 	}
 	// now sort d1, and get the top 5 accounts
-	// FIXME!!
+	sort.Sort(sort.Reverse(byHits(d1)))
 
-	for _, as := range d1[len(d1)-5:] {
-
+	for _, as := range d1[:5] {
 		fmt.Printf("%s\t%v\t3\t35\t1\n", accountInfo[as.ID].AccountID, accountInfo[as.ID].PageHits)
 	}
 }
