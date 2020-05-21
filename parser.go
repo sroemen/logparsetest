@@ -16,6 +16,7 @@ var (
 type actStats struct {
 	AccountID       string
 	Sesssions       []string
+	PageHits        int64
 	LongestSession  int64
 	ShortestSession int64
 }
@@ -73,12 +74,14 @@ func parseFile(fpath string) error {
 		urlsplit := urlpath.FindAll(scanner.Bytes(), -1)[2:]
 
 		if len(urlsplit) > 2 {
-			//accountID = append(accountID, string(urlsplit[2]))
-			accountInfo[string(urlsplit[2])] = actStats{}
+			id := string(urlsplit[2])[1:]
+			if len(id) > 6 {
+				accountInfo[id] = actStats{AccountID: id, PageHits: accountInfo[id].PageHits + 1}
 
-			fmt.Printf("%s \n", urlsplit)
+				fmt.Printf("%s \n", urlsplit)
 
-			fmt.Println(scanner.Text())
+				fmt.Println(scanner.Text())
+			}
 		}
 
 	}
@@ -87,6 +90,11 @@ func parseFile(fpath string) error {
 		log.Fatal(err)
 	}
 	return nil
+}
+
+type kv struct {
+	ID   string
+	Hits int64
 }
 
 func printStats() {
@@ -104,5 +112,19 @@ func printStats() {
 	fmt.Printf("id\t\t# pages\t# sess\tlongest\tshortest\n")
 
 	// to be replaced by a loop of the real stats
-	fmt.Printf("71f28176\t75\t3\t35\t1\n")
+	//fmt.Printf("71f28176\t75\t3\t35\t1\n")
+
+	// calculate the top 5 unique users by page views
+	d1 := []kv{}
+
+	for _, d := range accountInfo {
+		d1 = append(d1, kv{d.AccountID, d.PageHits})
+	}
+	// now sort d1, and get the top 5 accounts
+	// FIXME!!
+
+	for _, as := range d1[len(d1)-5:] {
+
+		fmt.Printf("%s\t%v\t3\t35\t1\n", accountInfo[as.ID].AccountID, accountInfo[as.ID].PageHits)
+	}
 }
