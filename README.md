@@ -5,7 +5,7 @@ It will scan them, looking for a predefined regex to determine the accountID.
 
 Within those lines that have accountIDs, it will collect the date field and parse it into a unix epoch.
 
-To calculate the session spans, each page hit's epochs are aligned and tested.  If there is a delta of 600 or more, it will indicate a newsession.  It will also determine the max and min length of sessions.
+To calculate the session spans, each page hit's epochs are aligned and tested.  If there is a delta of 600 or more (10 minutes), it will indicate a newsession.  It will also determine the max and min length of sessions.
 
 # Running the app
 
