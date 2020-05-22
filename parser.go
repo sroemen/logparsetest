@@ -1,5 +1,19 @@
 package main
 
+/*
+	Logparsetest
+
+	This app will scan a provided directory (argument 1 to the app), looking for
+	log files.
+	It will scan them, looking for a predefined regex to determine the accountID.
+	within those lines that have accountIDs, it will collect the date field and
+	parse it into a unix epoch.
+
+	to calculate the session spans, each page hit's epochs are aligned and tested
+	If there is a delta of 600 or more, it will indicate a new session.  it will
+	also determine the max and min length of sessions.
+*/
+
 import (
 	"bufio"
 	"fmt"
@@ -149,6 +163,14 @@ func printStats() {
 	}
 }
 
+// instanceSorter is to ensure that the order of the instance timestamps are in order
+//  in case they were read and appended out of order.
+type instanceSorter []int64
+
+func (a instanceSorter) Len() int           { return len(a) }
+func (a instanceSorter) Less(x, y int) bool { return a[x] < a[y] }
+func (a instanceSorter) Swap(x, y int)      { a[x], a[y] = a[y], a[x] }
+
 func calculateSessions(i []int64) (int64, int64, int64) {
 	sess := int64(1)
 	long := int64(0)
@@ -156,6 +178,9 @@ func calculateSessions(i []int64) (int64, int64, int64) {
 
 	start := int64(0)
 	sessionTime := int64(0)
+
+	// sort the incoming sessions
+	sort.Sort(instanceSorter(i))
 
 	for num, v := range i {
 		// don't start sessionTime from the first entry (nothing to subtract from, causing large deltas)
@@ -172,7 +197,7 @@ func calculateSessions(i []int64) (int64, int64, int64) {
 			}
 		}
 
-		if (v-start) > 600 && num != 0 {
+		if (v-start) >= 600 && num != 0 {
 			// increment session by one
 			sess = sess + 1
 			// reset sessionTime to zero, since it's a new session.
