@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"time"
 )
 
 var (
@@ -15,11 +16,9 @@ var (
 )
 
 type actStats struct {
-	AccountID       string
-	Sesssions       []string
-	PageHits        int64
-	LongestSession  int64
-	ShortestSession int64
+	AccountID string
+	Instances []int64
+	PageHits  int64
 }
 
 func main() {
@@ -40,19 +39,19 @@ func main() {
 				return err
 			}
 
-			//skip directories
+			// skip directories
 			if info.IsDir() {
 				return nil
 			}
 
-			fmt.Println(path, info.Size())
-
+			// parse the file(s)
 			return parseFile(path)
 		})
 	if err != nil {
 		log.Println(err)
 	}
 
+	// Print out the results.
 	printStats()
 }
 
@@ -66,8 +65,7 @@ func parseFile(fpath string) error {
 
 	scanner := bufio.NewScanner(file)
 
-	// 16/Aug/2016:14:19:54
-	var datepath = regexp.MustCompile(`[0-9]+/[a-zA-Z]+/[0-9]+:[0-9]+:[0-9]+:[0-9]+`)
+	var datepath = regexp.MustCompile(`[0-9]+/[a-zA-Z]+/[0-9]+:[0-9]+:[0-9]+:[0-9]+ [+-][0-9]+`)
 	var urlpath = regexp.MustCompile(`/[a-zA-Z0-9]+`)
 
 	// read each line and process the data
@@ -80,16 +78,29 @@ func parseFile(fpath string) error {
 		if len(urlsplit) > 2 {
 			id := string(urlsplit[2])[1:]
 			if len(id) > 6 {
-				accountInfo[id] = actStats{AccountID: id, PageHits: accountInfo[id].PageHits + 1}
 
-				fmt.Printf("%s \n", urlsplit)
+				const (
+					logLayout = "02/Jan/2006:15:04:05 -0700"
+				)
 
-				fmt.Printf("date: %s", date1)
+				thetime, e := time.Parse(logLayout, fmt.Sprintf("%s", date1[0]))
+				if e != nil {
+					fmt.Println(e)
+				}
 
-				//fmt.Println(scanner.Text())
+				// create the Instances info
+				ai, found := accountInfo[id]
+				if found {
+					ai.Instances = append(ai.Instances, thetime.Unix())
+				}
+
+				// Add to the map
+				accountInfo[id] = actStats{AccountID: id, PageHits: accountInfo[id].PageHits + 1, Instances: ai.Instances}
 			}
+		} else {
+			// enable to show what didn't match the urlsplit regex (ELBs)
+			//fmt.Printf("failed parsing: %s\n", scanner.Text())
 		}
-
 	}
 
 	if err := scanner.Err(); err != nil {
@@ -120,12 +131,9 @@ func printStats() {
 		41f58122        65      4       60      10
 		58122233        44      2       121     3
 	*/
-	fmt.Printf("\n\nTotal unique users: %v\n", len(accountInfo))
+	fmt.Printf("Total unique users: %v\n", len(accountInfo))
 	fmt.Println("Top users:")
 	fmt.Printf("id\t\t# pages\t# sess\tlongest\tshortest\n")
-
-	// to be replaced by a loop of the real stats
-	//fmt.Printf("71f28176\t75\t3\t35\t1\n")
 
 	d1 := []*kv{}
 	for _, d := range accountInfo {
@@ -136,6 +144,56 @@ func printStats() {
 
 	// list out just the first 5 entries
 	for _, as := range d1[:5] {
-		fmt.Printf("%s\t%v\t3\t35\t1\n", accountInfo[as.ID].AccountID, accountInfo[as.ID].PageHits)
+		sess, long, short := calculateSessions(accountInfo[as.ID].Instances)
+		fmt.Printf("%s\t%v\t%v\t%v\t%v\n", accountInfo[as.ID].AccountID, accountInfo[as.ID].PageHits, sess, long, short)
 	}
+}
+
+func calculateSessions(i []int64) (int64, int64, int64) {
+	sess := int64(1)
+	long := int64(0)
+	short := int64(60) //set min to 1 minute
+
+	start := int64(0)
+	sessionTime := int64(0)
+
+	for num, v := range i {
+		// don't start sessionTime from the first entry (nothing to subtract from, causing large deltas)
+		if num != 0 {
+			// determine the delta
+			sessionTime = sessionTime + (v - start)
+		}
+
+		if sessionTime > long {
+			long = sessionTime
+		} else {
+			if sessionTime < short && sessionTime > 0 {
+				short = sessionTime
+			}
+		}
+
+		if (v-start) > 600 && num != 0 {
+			// increment session by one
+			sess = sess + 1
+			// reset sessionTime to zero, since it's a new session.
+			sessionTime = 0
+			long = 0
+			short = 60
+		}
+
+		// set the start to the current timestamp
+		start = v
+	}
+
+	// sessions don't last 0 seconds (i'd hope) so set short to long if only one session
+	if sess == 1 {
+		// if longest time is less than a minute, make it a minute for stats
+		if long < 60 {
+			long = 60
+		}
+		short = long
+	}
+
+	// divide long, short by 60, to return minutes
+	return sess, long / 60, short / 60
 }
